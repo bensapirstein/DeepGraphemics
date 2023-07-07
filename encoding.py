@@ -13,7 +13,6 @@ class FontGraphemeAnalyzer:
         if os.path.exists("data/font_encoding.csv"):
             self.font_encoding = pd.read_csv("data/font_encoding.csv", index_col=0)
 
-
         else:
             etymology_table = pd.read_csv("data/etymology_table.csv", index_col=0).T
             specific_encoding = pd.read_csv("data/specific_encodings_T.csv", index_col=0)
@@ -121,7 +120,7 @@ class FontGraphemeAnalyzer:
 
         N = script_fonts[letter].apply(lambda x: len(x) if not pd.isna(x) else 0).sum()
         n_rows = N // n_cols + 1
-        fig = plt.figure(figsize=(12, 12))
+        fig = plt.figure(figsize=(12, 8))
 
         # turn off axis labels
         plt.axis('off')
