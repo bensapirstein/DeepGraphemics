@@ -1,23 +1,16 @@
 import os
-import numpy as np
 import pandas as pd
 import skia
+import numpy as np
 
-
-class FontDatasetGenerator:
+class FontDataset:
     def __init__(self):
-        self.colors = {
-            'red': (220, 20, 60), 'orange': (255, 165, 0), 'yellow': (255, 255, 0),
-            'green': (0, 128, 0), 'cyan': (0, 255, 255), 'blue': (0, 0, 255),
-            'purple': (128, 0, 128), 'pink': (255, 192, 203), 'chocolate': (210, 105, 30),
-            'silver': (192, 192, 192)
-        }
         self.font_color_value = (255, 255, 255)  # white
         self.back_color_value = (0, 0, 0)  # black
         self.sizes = {
             'small': 10, 'medium': 13, 'large': 16, 'xlarge': 19, 'xxlarge': 22, 'xxxlarge': 25
         }
-        self.font_encoding = pd.read_csv("data/font_encoding.csv", index_col=0)
+        self.font_encoding = pd.read_csv("data/encoding/font_encoding.csv", index_col=0)
         self.letters = self.font_encoding.columns[2:]
         self.img_size = 28
         self.max_w_len = 1  # Maximum word length
@@ -42,50 +35,55 @@ class FontDatasetGenerator:
                 graphemes_unicodes = self.font_encoding.loc[font_name, letter]
                 if pd.isna(graphemes_unicodes):
                     continue
-                self.process_graphemes(graphemes_unicodes, font_name, font_path, letter, script, size_value)
+
+                for i, gu in enumerate(graphemes_unicodes):
+                    if pd.isna(gu):
+                        continue
+
+
+                    draw_grapheme(gu, font_path, size_value, letter, font_name, i, script)
+
         print('Finished processing letter:', letter)
 
-    def process_graphemes(self, graphemes_unicodes, font_name, font_path, letter, script, size_value):
-        for i, gu in enumerate(graphemes_unicodes):
-            if pd.isna(gu):
-                continue
-            try:
-                self.draw_grapheme(gu, font_path, size_value, letter, font_name, i, script)
-            except Exception as e:
-                print(f"Error: {gu}, {size_value}, {font_name}")
-                print(e)
+# export draw_grapheme function outside the class
+def draw_grapheme(character, font_path, size_value, letter, font_name, i, script):
+    img_size = 28
+    surface = skia.Surface(img_size, img_size)
+    with surface as canvas:
+        canvas.clear(skia.Color(0, 0, 0)) # black background
 
-    def draw_grapheme(self, gu, font_path, size_value, letter, font_name, i, script):
-        surface = skia.Surface(self.img_size, self.img_size)
-        with surface as canvas:
-            canvas.clear(skia.Color(*self.back_color_value))
+        paint = skia.Paint()
+        paint.setARGB(255, 255, 255, 255) # white text
 
-            paint = skia.Paint()
-            paint.setARGB(255, *self.font_color_value)
+        font = skia.Font()
+        font.setSize(size_value)
+        font.setTypeface(skia.Typeface.MakeFromFile(font_path))
 
-            font = skia.Font()
-            font.setSize(size_value)
-            font.setTypeface(skia.Typeface.MakeFromFile(font_path))
+        text_blob = skia.TextBlob.MakeFromString(character, font)
 
-            text_blob = skia.TextBlob.MakeFromString(gu, font)
+        # calculate x, y to align the text in the center, take under consideration the text bounds and current x y position
+        x = (img_size - text_blob.bounds().width()) / 2 - text_blob.bounds().x()
+        y = (img_size - text_blob.bounds().height()) / 2 - text_blob.bounds().y()
 
-            # calculate x, y to align the text in the center, take under consideration the text bounds and current x y position
-            x = (self.img_size - text_blob.bounds().width()) / 2 - text_blob.bounds().x()
-            y = (self.img_size - text_blob.bounds().height()) / 2 - text_blob.bounds().y()
+        # rotate the canvas by 45 degrees
+        canvas.rotate(np.random.randint(-45, 45), img_size / 2, img_size / 2)
 
-            # rotate the canvas by 45 degrees
-            #canvas.rotate(np.random.randint(-45, 45), self.img_size / 2, self.img_size / 2)
+        canvas.drawTextBlob(text_blob, x, y, paint)
 
-            canvas.drawTextBlob(text_blob, x, y, paint)
+        # draw a rectangle around the shifted text blob
+        paint.setStyle(skia.Paint.kStroke_Style)
+        paint.setStrokeWidth(1)
+        paint.setARGB(255, 255, 0, 0)
+        rect = skia.Rect.MakeXYWH(x + text_blob.bounds().x(), y + text_blob.bounds().y(), text_blob.bounds().width(), text_blob.bounds().height())
+        canvas.drawRect(rect, paint)
+        image = surface.makeImageSnapshot()
 
-            img_name = f"{letter}_{size_value}_{script}_{font_name}_{i}.png"
-            img_path = os.path.join(self.font_dir, letter)
-            if not os.path.exists(img_path):
-                os.makedirs(img_path)
+        img_name = f"{letter}_{size_value}_{script}_{font_name}_{i}.png"
+        img_path = os.path.join('./dataset_skia', letter)
+        if not os.path.exists(img_path):
+            os.makedirs(img_path)
 
-            image = surface.makeImageSnapshot()
-            image.save(os.path.join(img_path, img_name))
-
+        image.save(os.path.join(img_path, img_name))
 
     # a function to generate a single instance specified by the parameters
     def generate_instance(self, font_name, letter, size_value):
@@ -96,8 +94,9 @@ class FontDatasetGenerator:
             return
         self.process_graphemes(graphemes_unicodes, font_name, font_path, letter, script, size_value)
 
-dataset_generator = FontDatasetGenerator()
-#dataset_generator.generate_dataset()
-dataset_generator.font_dir = './dataset_test'
-dataset_generator.generate_instance('Lateef-Regular', 'ʿayn', 13)
-dataset_generator.generate_instance('NotoNaskhArabic-VariableFont_wght', 'ʿayn', 13)
+def main():
+    dataset_generator = FontDataset()
+    dataset_generator.generate_dataset()
+
+if __name__ == '__main__':
+    main()

@@ -8,16 +8,17 @@ from tqdm import tqdm
 class FontGraphemeAnalyzer:
 
     def __init__(self, threshold=0.5):
-        self.scripts = pd.read_csv("data/scripts.csv", index_col=0)
+        self.scripts = pd.read_csv("data/encoding/scripts.csv", index_col=0)
         # check if font_encoding.csv exists
-        if os.path.exists("data/font_encoding.csv"):
-            self.font_encoding = pd.read_csv("data/font_encoding.csv", index_col=0)
+        if os.path.exists("data/encoding/font_encoding.csv"):
+            self.font_encoding = pd.read_csv("data/encoding/font_encoding.csv", index_col=0)
 
         else:
-            etymology_table = pd.read_csv("data/etymology_table.csv", index_col=0).T
-            specific_encoding = pd.read_csv("data/specific_encodings_T.csv", index_col=0)
+            etymology_table = pd.read_csv("data/encoding/alphabet_allographic_etymology.csv", index_col=0).T
+            specific_encoding = pd.read_csv("data/encoding/alphabet_specific_encodings.csv", index_col=0).T
 
             self.encoding = pd.concat([etymology_table, specific_encoding], axis=0)
+
             self.font_encoding = pd.DataFrame(columns=["font_path", "script"] + self.encoding.columns.tolist())
             self.font_files = self.find_font_files()
             self.missing_glyphs = self.find_missing_glyphs()
@@ -198,7 +199,7 @@ def main():
     #         # TODO: if font in encoding.columns perform encoding here and send the font specific unicode graphemes to plot_font
     #         plot_font(font, script, graphemes, encoding)
 
-    scripts = ["Paleo-Hebrew", "Phoenician", "Proto-Sinaitic", "Samaritan", "Aramaic"]
+    scripts = ["Paleo-Hebrew", "Phoenician", "Proto-Sinaitic", "Samaritan", "Aramaic", "Nabataean"]
 
     for letter in fga.font_encoding.columns[2:]:
         fga.plot_graphemes(letter, scripts, n_cols=15)
