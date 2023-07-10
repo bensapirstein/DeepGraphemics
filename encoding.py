@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 from fontTools.ttLib import TTFont, TTLibError
 from tqdm import tqdm
+from fontTools.pens.statisticsPen import StatisticsPen
 
 class FontGraphemeAnalyzer:
 
@@ -28,7 +29,7 @@ class FontGraphemeAnalyzer:
             self.font_encoding = self.font_encoding.drop(rows_to_remove, axis=0)
 
             # save the font encoding to a csv file
-            self.font_encoding.to_csv("data/font_encoding.csv")
+            self.font_encoding.to_csv("data/encoding/font_encoding.csv")
 
         font_paths = self.font_encoding["font_path"].unique().tolist()
         self.load_fonts(font_paths)
@@ -95,7 +96,11 @@ class FontGraphemeAnalyzer:
         try:
             font = TTFont(font_path)
             glyph_name = font.getBestCmap().get(ord(letter))
-            return glyph_name is not None
+            if glyph_name is None:
+                return False
+            pen = StatisticsPen(font.getGlyphSet())
+            font.getGlyphSet()[glyph_name].draw(pen)
+            return pen.area != 0
         except TTLibError:
             return False
 
