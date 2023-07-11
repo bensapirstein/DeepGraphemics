@@ -8,19 +8,19 @@ class DatasetGenerator:
     def __init__(self):
         self.font_color_value = (255, 255, 255)  # white
         self.back_color_value = (0, 0, 0)  # black
-        self.sizes = {
-            'small': 10, 'medium': 13, 'large': 16, 'xlarge': 19, 'xxlarge': 22, 'xxxlarge': 25
-        }
-        self.font_encoding = pd.read_csv("data/encoding/font_encoding.csv", index_col=0)
+        self.sizes = list(range(20, 25, 1))
+        self.font_encoding = pd.read_csv("../data/encoding/font_encoding.csv", index_col=0)
         self.letters = self.font_encoding.columns[2:]
         selected_scripts = ["Hieroglyph", "Proto-Sinaitic", "Phoenician", "Ancient North-Arabian",
                             "Ancient South-Arabian", "Ge'ez", "Paleo-Hebrew", "Samaritan", "Aramaic", "Syriac",
                             "Hebrew", "Nabataean", "Arabic"]
+        # variable to count the number of generated images for each letter
+        self.counts = {letter: 0 for letter in self.letters}
 
         # create a dictionary of fonts by script
         self.fnts = {}
         # count the number of graphemes for each script
-        graphemes_count = {}
+        graphemes_count = {letter: {script: 0 for script in selected_scripts} for letter in self.letters}
         for font_name in self.font_encoding.index:
             font_path = self.font_encoding.loc[font_name, "font_path"]
             script = self.font_encoding.loc[font_name, "script"]
@@ -30,16 +30,29 @@ class DatasetGenerator:
                 font = skia.Font()
                 font.setTypeface(skia.Typeface.MakeFromFile(font_path))
                 self.fnts[script][font_name] = font
-                graphemes_count[script] = graphemes_count.get(script, 0) + self.font_encoding.loc[font_name, self.letters].count()
+                for letter in self.letters:
+                    graphemes = self.font_encoding.loc[font_name, letter]
+                    if not pd.isna(graphemes):
+                        graphemes_count[letter][script] += len(graphemes)
 
-        counts = np.array(list(graphemes_count.values()))
+        # augmentation parameters
+        max_augmentations = 10
+        self.rotation_mean = 0
+        self.rotation_std = 5
 
-        augmentations = np.ceil(counts.max() / counts).astype(int)
-        self.augmentations = {script: augmentation for script, augmentation in zip(graphemes_count.keys(), augmentations)}
-        #self.plot_graphemes(graphemes_count, counts, augmentations)
+        # calculate the number of augmentations for each script and letter
+        self.augmentations = {}
+        for letter in self.letters:
+            counts = np.array(list(graphemes_count[letter].values()))
+            augmentations = np.ceil(counts.max() / counts).astype(int)
+
+            # limit the number of augmentations to 10
+            augmentations[augmentations > max_augmentations] = max_augmentations
+            self.augmentations[letter] = {script: augmentation for script, augmentation in
+                                            zip(graphemes_count[letter].keys(), augmentations)}
 
         self.img_size = 28
-        self.font_dir = './dataset_skia'
+        self.font_dir = '../dataset_skia'
 
     def plot_graphemes(self, graphemes_count, counts, augmentations):
         # plot the number of graphemes for each script and the number of augmentations times the number of graphemes
@@ -70,7 +83,7 @@ class DatasetGenerator:
                         for i, character in enumerate(graphemes_unicodes):
                             if pd.isna(character):
                                 continue
-                            for size_name, size_value in self.sizes.items():
+                            for size_value in self.sizes:
                                 paint.setColor(skia.Color(*self.font_color_value))
                                 font.setSize(size_value)
 
@@ -89,21 +102,23 @@ class DatasetGenerator:
 
                                 image_path = os.path.join(self.font_dir, letter, script)
 
+                                n_augmentations = self.augmentations[letter][script]
                                 self.random_transformations(canvas, text_blob, bound, paint, image_path, image_name,
-                                                              count=self.augmentations[script])
-
+                                                            count=n_augmentations)
+                                self.counts[letter] += n_augmentations
 
 
             print(f"Finished letter {letter}")
 
         print('Finished')
+        print(f"Number of images generated for each letter: {self.counts}")
 
     def random_transformations(self, canvas, text_blob, bound, paint, img_path, img_name, count=1):
         for i in range(count):
             # apply random transformations
             canvas.clear(skia.Color(*self.back_color_value))
             # rotate the canvas by a random angle between -45 and 45 degrees, use normal distribution
-            angle = np.random.normal(0, 25)
+            angle = np.random.normal(self.rotation_mean, self.rotation_std)
             rotation = skia.Matrix()
             rotation.setRotate(angle, self.img_size / 2, self.img_size / 2)
             inverse_rotation = skia.Matrix()
