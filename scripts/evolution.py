@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import networkx as nx
-from encoding import FontGraphemeAnalyzer
+from scripts.encoding import FontGraphemeAnalyzer
 
 relationships = {
     "Hieroglyph": ["Proto-Sinaitic"],
