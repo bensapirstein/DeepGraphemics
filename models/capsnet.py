@@ -122,6 +122,7 @@ class CapsNet(nn.Module):
             self.digit_capsules = DigitCaps(config.dc_num_capsules, config.dc_num_routes, config.dc_in_channels,
                                             config.dc_out_channels)
             self.decoder = Decoder(config.input_width, config.input_height, config.cnn_in_channels, config.dc_num_capsules)
+            self.reconstruction_coeff = config.reconstruction_coeff
         else:
             self.conv_layer = ConvLayer()
             self.primary_capsules = PrimaryCaps()
@@ -153,4 +154,4 @@ class CapsNet(nn.Module):
 
     def reconstruction_loss(self, data, reconstructions):
         loss = self.mse_loss(reconstructions.view(reconstructions.size(0), -1), data.view(reconstructions.size(0), -1))
-        return loss * 0.0005
+        return loss * self.reconstruction_coeff

@@ -38,7 +38,7 @@ class DatasetGenerator:
         # augmentation parameters
         max_augmentations = 10
         self.rotation_mean = 0
-        self.rotation_std = 5
+        self.rotation_std = 45
 
         # calculate the number of augmentations for each script and letter
         self.augmentations = {}
@@ -52,7 +52,7 @@ class DatasetGenerator:
                                             zip(graphemes_count[letter].keys(), augmentations)}
 
         self.img_size = 28
-        self.font_dir = '../dataset_skia'
+        self.font_dir = f'../datasets/dataset_rotation_std_{self.rotation_std}/'
 
     def plot_graphemes(self, graphemes_count, counts, augmentations):
         # plot the number of graphemes for each script and the number of augmentations times the number of graphemes
