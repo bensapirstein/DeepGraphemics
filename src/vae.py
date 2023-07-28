@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Encoder(nn.Module):
-    def __init__(self, latent_dims=latent_dims, capacity=capacity):
+    def __init__(self, latent_dims, capacity):
         super(Encoder, self).__init__()
         self.c = capacity
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=self.c, kernel_size=4, stride=2, padding=1) # out: c x 14 x 14
@@ -20,7 +20,7 @@ class Encoder(nn.Module):
         return x_mu, x_logvar
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dims=latent_dims, capacity=capacity):
+    def __init__(self, latent_dims, capacity):
         super(Decoder, self).__init__()
         self.c = capacity
         self.fc = nn.Linear(in_features=latent_dims, out_features=self.c*2*7*7)
@@ -35,7 +35,7 @@ class Decoder(nn.Module):
         return x
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, latent_dims=latent_dims, capacity=capacity):
+    def __init__(self, latent_dims, capacity):
         super(VariationalAutoencoder, self).__init__()
         self.encoder = Encoder(latent_dims, capacity)
         self.decoder = Decoder(latent_dims, capacity)
