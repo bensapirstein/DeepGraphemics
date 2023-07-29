@@ -3,6 +3,7 @@ import abc
 import sys
 import tqdm
 import torch
+import numpy as np
 from typing import Any, Callable
 from torch.utils.data import DataLoader
 
@@ -197,9 +198,8 @@ class Trainer(abc.ABC):
 
 
 class VAETrainer(Trainer):
-    def __init__(self, model, loss_fn, optimizer, variational_beta, device=None):
+    def __init__(self, model, loss_fn, optimizer, device=None):
         super().__init__(model, loss_fn, optimizer, device)
-        self.variational_beta = variational_beta
 
     def train_batch(self, batch) -> BatchResult:
         X, y = batch
@@ -212,7 +212,7 @@ class VAETrainer(Trainer):
         image_batch_recon, latent_mu, latent_logvar = self.model(X)
 
         # reconstruction error
-        loss = self.loss_fn(image_batch_recon, X, latent_mu, latent_logvar, self.variational_beta)
+        loss = self.loss_fn(image_batch_recon, X, latent_mu, latent_logvar)
 
         # Backward pass
         self.optimizer.zero_grad()
@@ -238,8 +238,62 @@ class VAETrainer(Trainer):
             image_batch_recon, latent_mu, latent_logvar = self.model(X)
 
             # reconstruction error
-            loss = self.loss_fn(image_batch_recon, X, latent_mu, latent_logvar, self.variational_beta)
+            loss = self.loss_fn(image_batch_recon, X, latent_mu, latent_logvar)
 
             num_correct = 0
 
         return BatchResult(loss.item(), num_correct)
+
+class CapsNetTrainer(Trainer):
+    def __init__(self, model, loss_fn, optimizer, device=None):
+        super().__init__(model, loss_fn, optimizer, device)
+        self.n_classes = model.dc_num_capsules
+
+    def train_batch(self, batch) -> BatchResult:
+        X, y = batch
+
+        y = torch.sparse.torch.eye(self.n_classes).index_select(dim=0, index=y)
+
+        if self.device:
+            X = X.to(self.device)
+            y = y.to(self.device)
+
+        # Forward pass
+        # vae reconstruction
+        output, reconstructions, masked = self.model(X)
+
+        # reconstruction error
+        loss = self.loss_fn(X, output, y, reconstructions)
+
+        # Backward pass
+        self.optimizer.zero_grad()
+        loss.backward()
+
+        # Optimizer step
+        self.optimizer.step()
+
+        num_correct = sum(np.argmax(masked.data.cpu().numpy(), 1) ==
+                          np.argmax(y.data.cpu().numpy(), 1))
+
+        return BatchResult(loss.item(), num_correct)
+    
+    def test_batch(self, batch) -> BatchResult:
+        X, y = batch
+
+        y = torch.sparse.torch.eye(self.n_classes).index_select(dim=0, index=y)
+
+        if self.device:
+            X = X.to(self.device)
+            y = y.to(self.device)
+
+        with torch.no_grad():
+            # Forward pass
+            output, reconstructions, masked = self.model(X)
+            loss = self.loss_fn(X, output, y, reconstructions)
+
+            num_correct = sum(np.argmax(masked.data.cpu().numpy(), 1) == 
+                              np.argmax(y.data.cpu().numpy(), 1))
+            
+        return BatchResult(loss.item(), num_correct)
+
+

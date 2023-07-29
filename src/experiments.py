@@ -8,24 +8,11 @@ import itertools
 import torchvision
 from torch.utils.data import DataLoader
 
-from . import vae, training
+from . import vae, capsnet, training
 from .train_results import FitResult
 from .datasets import GraphemesDataset
 
 #DATA_DIR = os.path.expanduser("~/.pytorch-datasets")
-
-MODEL_TYPES = dict(
-    vae=vae.VariationalAutoencoder,
-)
-
-LOSS_TYPES = dict(
-    vae=vae.vae_loss,
-)
-
-TRAINER_TYPES = dict(
-    vae=training.VAETrainer,
-)
-
 
 def run_experiment(
     run_name,
@@ -44,10 +31,8 @@ def run_experiment(
     lr=1e-3,
     reg=1e-5,
     # Model params
-    latent_dims=2,
-    capacity=64,
-    variational_beta=1,
     model_type="vae",
+    model_config=None,
     # You can add extra configuration for your experiments here
     **kw,
 ):
@@ -68,30 +53,28 @@ def run_experiment(
     if not device:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Select model class
-    if model_type not in MODEL_TYPES:
-        raise ValueError(f"Unknown model type: {model_type}")
-    model_cls = MODEL_TYPES[model_type]
-
     fit_res = None
     # Data - use DataLoader
     train_loader = DataLoader(ds_train, batch_size=bs_train, shuffle=True)
     test_loader = DataLoader(ds_test, batch_size=bs_test, shuffle=False)
 
-    # Create model, loss and optimizer instances
-    model = model_cls(
-        latent_dims,
-        capacity
-    )
+    if model_type == "vae":
+        model = vae.VariationalAutoencoder(model_config)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg)
+        trainer = training.VAETrainer(model, model.loss, optimizer, device)
+        fit_res = trainer.fit(dl_train=train_loader, dl_test=test_loader, 
+                              num_epochs=epochs, checkpoints=checkpoints, max_batches=batches, **kw)
+    elif model_type == "capsnet":
+        model = capsnet.CapsNet(model_config)
+        model = torch.nn.DataParallel(model)
+        model = model.module
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg)
+        trainer = training.CapsNetTrainer(model, model.loss, optimizer, device)
+        fit_res = trainer.fit(dl_train=train_loader, dl_test=test_loader, 
+                              num_epochs=epochs, checkpoints=checkpoints, max_batches=batches, **kw)
 
-    loss_fn = LOSS_TYPES[model_type]
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg)
     
-    # Train
-    trainer_cls = TRAINER_TYPES[model_type]
-    trainer = trainer_cls(model, loss_fn, optimizer, variational_beta, device)
-    fit_res = trainer.fit(dl_train=train_loader, dl_test=test_loader, 
-                          num_epochs=epochs, checkpoints=checkpoints, max_batches=batches, **kw)
 
     save_experiment(run_name, out_dir, cfg, fit_res)
 
