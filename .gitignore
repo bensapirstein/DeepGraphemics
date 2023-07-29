@@ -4,4 +4,10 @@ data/fonts/
 
 .idea/
 
-dataset/
+datasets/
+
+animations/renders/
+
+__pycache__/
+
+.vscode
