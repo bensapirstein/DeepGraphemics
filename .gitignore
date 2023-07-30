@@ -11,3 +11,4 @@ animations/renders/
 __pycache__/
 
 .vscode
+data/semiticRegular/

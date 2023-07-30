@@ -8,17 +8,18 @@ from fontTools.pens.statisticsPen import StatisticsPen
 
 class FontGraphemeAnalyzer:
 
-    def __init__(self, threshold=0.5):
-        self.scripts = pd.read_csv("../data/encoding/scripts.csv", index_col=0)
+    def __init__(self, scripts_csv, etymology_csv, specific_encoding_csv, font_encoding_csv, data_dir, threshold=0.5):
+        self.data_dir = data_dir
+        self.scripts = pd.read_csv(scripts_csv, index_col=0)
+        self.etymology_table = pd.read_csv(etymology_csv, index_col=0)
         # check if font_encoding.csv exists
-        if os.path.exists("../data/encoding/font_encoding.csv"):
-            self.font_encoding = pd.read_csv("../data/encoding/font_encoding.csv", index_col=0)
+        if os.path.exists(font_encoding_csv):
+            self.font_encoding = pd.read_csv(font_encoding_csv, index_col=0)
 
         else:
-            etymology_table = pd.read_csv("../data/encoding/alphabet_allographic_etymology.csv", index_col=0).T
-            specific_encoding = pd.read_csv("../data/encoding/alphabet_specific_encodings.csv", index_col=0).T
+            specific_encoding = pd.read_csv(specific_encoding_csv, index_col=0).T
 
-            self.encoding = pd.concat([etymology_table, specific_encoding], axis=0)
+            self.encoding = pd.concat([self.etymology_table.T, specific_encoding], axis=0)
 
             self.font_encoding = pd.DataFrame(columns=["font_path", "script"] + self.encoding.columns.tolist())
             self.font_files = self.find_font_files()
@@ -29,7 +30,7 @@ class FontGraphemeAnalyzer:
             self.font_encoding = self.font_encoding.drop(rows_to_remove, axis=0)
 
             # save the font encoding to a csv file
-            self.font_encoding.to_csv("../data/encoding/font_encoding.csv")
+            self.font_encoding.to_csv(font_encoding_csv)
 
         font_paths = self.font_encoding["font_path"].unique().tolist()
         self.load_fonts(font_paths)
@@ -39,9 +40,8 @@ class FontGraphemeAnalyzer:
         Find all font files in the data/fonts directory and return a dictionary
         """
         font_files = {}
-        data_dir = "../data/fonts"
         for script in self.scripts.index:
-            script_dir = os.path.join(data_dir, script)
+            script_dir = os.path.join(self.data_dir, script)
             font_files[script] = {}
             for encoding in os.listdir(script_dir):
                 # check if the encoding is a folder
@@ -60,10 +60,9 @@ class FontGraphemeAnalyzer:
         # look for ttf files in the data_dir directory, they are multilingual fonts
         font_files["Multilingual"] = {}
         font_files["Multilingual"]["Unicode"] = []
-        for file in os.listdir(data_dir):
+        for file in os.listdir(self.data_dir):
             if file.endswith(".ttf") or file.endswith(".otf"):
-                font_path = os.path.join(data_dir, file)
-                font_files["Multilingual"]["Unicode"].append(font_path)
+                font_files["Multilingual"]["Unicode"].append(file)
                 font_manager.fontManager.addfont(font_path)
 
         return font_files
@@ -90,6 +89,7 @@ class FontGraphemeAnalyzer:
 
     def load_fonts(self, font_paths):
         for font_file in font_paths:
+            font_path = os.path.join(self.data_dir, font_file)
             font_manager.fontManager.addfont(font_file)
 
     def is_letter_supported(self, letter, font_path):
@@ -118,7 +118,38 @@ class FontGraphemeAnalyzer:
                     else:
                         self.font_encoding.loc[font_name, letter] += grapheme_unicode
 
+    def plot_etymology_table(self, selected_scripts, fonts_dir):
 
+        n_rows = self.etymology_table.shape[0]
+        n_cols = len(selected_scripts)
+        fig = plt.figure(figsize=(12, 8))
+
+        # turn off axis labels
+        plt.axis('off')
+
+        for i, script in enumerate(selected_scripts):
+            # plot the script name on the top of the column, flipped vertically
+            x = 1.1 * i / n_cols
+            plt.text(x, 2, script, fontsize=20, ha='center', va='bottom', rotation=90)
+
+
+            font_file = self.scripts.loc[script]["font path"]
+            font_name = os.path.splitext(os.path.basename(font_file))[0]
+            font_path = os.path.join(fonts_dir, font_file)
+            font = font_manager.FontProperties(fname=font_path)
+
+            for j, letter in enumerate(self.etymology_table.index):
+                graphemes = self.font_encoding.loc[font_name, letter]
+                if pd.isna(graphemes):
+                    print(f"Graphemes for {letter} in {script} are missing.")
+                    continue
+
+                # trip graphemes up to 2 characters
+                graphemes = graphemes[:2]
+
+                y = (1 - ((j+1) / n_rows)) * 2
+
+                plt.text(x, y, graphemes, fontproperties=font, fontsize=40, ha='center', va='center')
 
     def plot_graphemes(self, letter, scripts, n_cols=10):
         # if script is a list
@@ -192,7 +223,11 @@ def plot_font(font_file, script, graphemes, encoding):
 
 
 def main():
-    fga = FontGraphemeAnalyzer()
+    fga = FontGraphemeAnalyzer("../data/encoding/scripts.csv",
+                               "../data/encoding/alphabet_allographic_etymology.csv",
+                               "../data/encoding/alphabet_specific_encodings.csv",
+                               "../data/encoding/font_encoding.csv",
+                               "../data/fonts")
 
     # plot_font("data/fonts/Paleo-Hebrew/Latin/PaleoBora.ttf", "Proto-Sinaitic", graphemes, encoding)
     #
