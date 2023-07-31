@@ -53,9 +53,9 @@ class FontGraphemeAnalyzer:
                 for root, dirs, files in os.walk(encoding_dir):
                     for file in files:
                         if file.endswith(".ttf") or file.endswith(".otf"):
-                            font_path = os.path.join(root, file)
+                            # remove the data_dir from the root path
+                            font_path = os.path.join(root.replace(self.data_dir, "").lstrip(os.sep), file)
                             font_files[script][encoding].append(font_path)
-                            font_manager.fontManager.addfont(font_path)
 
         # look for ttf files in the data_dir directory, they are multilingual fonts
         font_files["Multilingual"] = {}
@@ -63,7 +63,6 @@ class FontGraphemeAnalyzer:
         for file in os.listdir(self.data_dir):
             if file.endswith(".ttf") or file.endswith(".otf"):
                 font_files["Multilingual"]["Unicode"].append(file)
-                font_manager.fontManager.addfont(font_path)
 
         return font_files
 
@@ -90,7 +89,7 @@ class FontGraphemeAnalyzer:
     def load_fonts(self, font_paths):
         for font_file in font_paths:
             font_path = os.path.join(self.data_dir, font_file)
-            font_manager.fontManager.addfont(font_file)
+            font_manager.fontManager.addfont(font_path)
 
     def is_letter_supported(self, letter, font_path):
         try:
@@ -110,7 +109,8 @@ class FontGraphemeAnalyzer:
             if pd.isna(letter_allographs):
                 continue
             for grapheme_unicode in letter_allographs:
-                if not self.is_letter_supported(grapheme_unicode, self.font_encoding.loc[font_name, "font_path"]):
+                font_path = os.path.join(self.data_dir, self.font_encoding.loc[font_name, "font_path"])
+                if not self.is_letter_supported(grapheme_unicode, font_path):
                     missing_glyphs[font_name].append(grapheme_unicode)
                 else:
                     if pd.isna(self.font_encoding.loc[font_name, letter]):
@@ -151,21 +151,47 @@ class FontGraphemeAnalyzer:
 
                 plt.text(x, y, graphemes, fontproperties=font, fontsize=40, ha='center', va='center')
 
-    def plot_graphemes(self, letter, scripts, n_cols=10):
+
+    def plot_graphemes(self, letter, scripts=None, n_cols=20):
+        
+        if scripts is None:
+            scripts = self.font_encoding["script"].unique().tolist()
+
+        # sort font_encoding by script according to the order in scripts
+        self.font_encoding = self.font_encoding.set_index("script")
+        self.font_encoding = self.font_encoding.loc[scripts]
+        self.font_encoding = self.font_encoding.reset_index()
+        
+
         # if script is a list
         script_fonts = self.font_encoding.loc[self.font_encoding["script"].isin(scripts)]
 
         N = script_fonts[letter].apply(lambda x: len(x) if not pd.isna(x) else 0).sum()
         n_rows = N // n_cols + 1
-        fig = plt.figure(figsize=(12, 8))
+
+        fig, (ax_graphemes, ax_legend) = plt.subplots(2, 1, figsize=(12, 16), gridspec_kw={'height_ratios': [n_rows, 0]})
+
+        # Plot the graphemes
+        ax_graphemes.axis('off')
+        ax_graphemes.set_title(f"{letter} graphemes", fontsize=20)
+
 
         # turn off axis labels
-        plt.axis('off')
+        ax_legend.axis('off')
 
         i = 0
+        script_colors = {}  # Dictionary to map each script to a color
+
+        # Generating unique colors for each script
+        color_palette = plt.cm.tab10.colors
+        num_scripts = len(scripts)
+        for idx, script in enumerate(scripts):
+            script_colors[script] = color_palette[idx % len(color_palette)]
+
         for font_name in script_fonts.index:
             font_file = script_fonts.loc[font_name, "font_path"]
-            font = font_manager.FontProperties(fname=font_file)
+            font_path = os.path.join(self.data_dir, font_file)
+            font = font_manager.FontProperties(fname=font_path)
             graphemes_unicodes = script_fonts.loc[font_name, letter]
 
             if pd.isna(graphemes_unicodes):
@@ -175,10 +201,20 @@ class FontGraphemeAnalyzer:
                 if pd.isna(grapheme_unicode):
                     continue
                 x = (i % n_cols) / n_cols
-                y = 1 - ((i // n_cols) + 1) / n_rows
+                y = 1 - ((i // n_cols) + 0.5) / n_rows
 
-                plt.text(x, y, grapheme_unicode, fontproperties=font, fontsize=40, ha='center', va='center')
+                script = script_fonts.loc[font_name, "script"]
+                color = script_colors.get(script, "black")  # Default to black if the script color is not defined
+
+                ax_graphemes.text(x, y, grapheme_unicode, fontproperties=font, fontsize=20, ha='center', va='center', color=color)
                 i += 1
+
+        # add a legend describing the color of each script
+        num_cols = 5
+        num_rows = num_scripts // num_cols + 1
+        legend_elements = [plt.Line2D([0], [0], marker='o', color='w', label=script, markerfacecolor=color, markersize=15)
+                            for script, color in script_colors.items()]
+        ax_legend.legend(handles=legend_elements, loc='lower center', bbox_to_anchor=(0.5, 0), ncol=num_cols)
 
         plt.show()
 

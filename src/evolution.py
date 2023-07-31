@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import networkx as nx
-from scripts.encoding import FontGraphemeAnalyzer
+# from encoding import FontGraphemeAnalyzer
 
 relationships = {
     "Hieroglyph": ["Proto-Sinaitic"],
@@ -34,13 +34,13 @@ def create_graph(relationships, graphemes, letter):
 
     for script, children in relationships.items():
         if not G.has_node(script):
-            symbol = graphemes[graphemes["script"]==script][letter].values[0]
+            symbol = graphemes[graphemes["script"]==script][letter].values[0][0]
             node_labels[script] = f"{symbol}"
             G.add_node(script, symbol=symbol)
 
         for child in children:
             if not G.has_node(child):
-                symbol = graphemes[graphemes["script"]==child][letter].values[0]
+                symbol = graphemes[graphemes["script"]==child][letter].values[0][0]
                 node_labels[child] = f"{symbol}"
                 G.add_node(child, symbol=symbol)
 
@@ -82,63 +82,35 @@ def plot_graph(G, node_labels, letter, font_paths, outpath=None):
     else:
         plt.show()
 
-def plot_evolutionary_tree(letter, relationships, font_encoding, outpath=None):
+def plot_evolutionary_tree(letter, relationships, fga, fonts_dir, outpath=None):
     # extract scripts from relationships keys and values
-    scripts = list(relationships.keys()) + [child for children in relationships.values() for child in children]
-    scripts = list(set(scripts))
+    evo_scripts = list(relationships.keys()) + [child for children in relationships.values() for child in children]
+    evo_scripts = list(set(evo_scripts))
 
+    font_paths = {}
     selected_fonts = []
-    for script in scripts:
-        script_fonts = font_encoding[font_encoding["script"] == script]
-        sample = script_fonts.sample(n=1, replace=True)
-        selected_fonts.append(sample)
-        font_manager.fontManager.addfont(sample["font_path"].values[0])
+    for script in evo_scripts:
+        font_file = fga.scripts.loc[script]["font path"]
+        font_name = os.path.splitext(os.path.basename(font_file))[0]
+        selected_fonts.append(fga.font_encoding.loc[font_name])
+        font_path = os.path.join(fonts_dir, font_file)
+        font_paths[script] = font_path
 
-    graphemes = pd.concat(selected_fonts)
-    font_paths = dict(zip(scripts, graphemes["font_path"].values))
+    graphemes = pd.concat(selected_fonts, axis=1).T
 
     G, node_labels = create_graph(relationships, graphemes, letter)
     plot_graph(G, node_labels, letter, font_paths, outpath=outpath)
 
 
 def main():
-    analyzer = FontGraphemeAnalyzer()
-    add_fonts(analyzer)
+    fga = FontGraphemeAnalyzer("../data/encoding/scripts.csv",
+                               "../data/encoding/alphabet_allographic_etymology.csv",
+                               "../data/encoding/alphabet_specific_encodings.csv",
+                               "../data/encoding/font_encoding.csv",
+                               "../data/fonts")
 
-    os.makedirs("output", exist_ok=True)
-    n_frames = 4
-    frame_duration = 0.4  # in seconds
-    letters = letters[:24]
-
-    for letter in letters:
-        # create a list of image file paths for the letter's evolution trees
-        image_files = []
-        for i in range(n_frames):
-            outpath = f"output/{letter}_{i}.png"
-            plot_evolutionary_tree(letter, relationships, analyzer.font_encoding, outpath=outpath)
-            image_files.append(outpath)
-
-        # concatenate the images into a video using ffmpeg
-        video_name = f"output/{letter}.mp4"
-        image_list = "|".join(image_files)
-        os.system(f"ffmpeg -y -loglevel error -framerate 1/{frame_duration} -i 'concat:{image_list}' -c:v libx264 -vf 'fps=25,format=yuv420p' {video_name}")
-
-        # delete the image files
-        for file_path in image_files:
-            os.remove(file_path)
-
-    # concatenate the videos into a single video using ffmpeg
-    video_files = [f"{letter}.mp4" for letter in letters]
-    video_list = "\n".join([f"file '{file_path}'" for file_path in video_files])
-    with open("output/video_list.txt", "w") as f:
-        f.write(video_list)
-    os.system(f"ffmpeg -y -loglevel error -f concat -safe 0 -i output/video_list.txt -c copy output/all_letters.mp4")
-
-    # delete the video files
-    for file_path in video_files:
-        os.remove(f"output/{file_path}")
-
-
+    # plot the evolution of the letter "aleph"
+    plot_evolutionary_tree("aleph", relationships, fga, "../data/semiticRegular")
 
 if __name__ == "__main__":
     main()
