@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 class DatasetGenerator:
     def __init__(self, font_encoding_file, output_dir, fonts_dir, img_size=28, translate=True, 
-                 rotation_dist=(0,5), sizes=range(20, 25), max_augmentations=10, duplications=1, selected_scripts=None, selected_letters=None):
+                 rotation_dist=(0,5), sizes=range(20, 25), max_augmentations=10, repetitions=1, selected_scripts=None, selected_letters=None):
         """
         A class for generating a dataset of images from fonts for various scripts.
         """
@@ -20,7 +20,7 @@ class DatasetGenerator:
         self.back_color = (0, 0, 0) # black
         self.font_size_range = sizes
         self.max_augmentations = max_augmentations
-        self.duplications = duplications
+        self.repetitions = repetitions
 
         # Load font encoding data
         self.font_encoding = pd.read_csv(font_encoding_file, index_col=0)
@@ -86,7 +86,7 @@ class DatasetGenerator:
     def plot_graphemes_count(self):
         # sum the total number of graphemes for each script across all letters
         counts = np.array(list(self.graphemes_count.sum(axis=0).values))
-        augments = np.array(list((self.graphemes_count * self.augmentations).sum(axis=0).values))
+        augments = np.array(list((self.graphemes_count * self.augmentations * self.repetitions).sum(axis=0).values))
 
         fig, ax = plt.subplots()
         ax.bar(self.scripts, counts, color=self.colors)
@@ -115,7 +115,7 @@ class DatasetGenerator:
                     if not os.path.exists(path):
                         os.makedirs(path)
 
-                    n_augmentations = self.augmentations.loc[letter, script] * self.duplications
+                    n_augmentations = self.augmentations.loc[letter, script] * self.repetitions
 
                     for font_name, font in self.fnts[script].items():
                         graphemes_unicodes = self.font_encoding.loc[font_name, letter]
@@ -129,6 +129,7 @@ class DatasetGenerator:
                             self.counts[letter] += n_augmentations
                 print(f"Finished letter {letter}")
         print('Finished')
+        print(f"total number of images generated: {sum(self.counts.values())}")
         print(f"Number of images generated for each letter: {self.counts}")
 
     def random_transformations(self, canvas, letter, script, character, font, font_name, paint):
