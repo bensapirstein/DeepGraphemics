@@ -13,11 +13,12 @@ from .train_results import FitResult
 from .datasets import GraphemesDataset
 
 #DATA_DIR = os.path.expanduser("~/.pytorch-datasets")
+MODEL_TYPES = dict(vae=vae.VariationalAutoencoder, capsnet=capsnet.CapsNet)
 
 def run_experiment(
     run_name,
-    data_dir="datasets",
-    letter="aleph",
+    data_dir,
+    letter=None,
     out_dir="./results",
     seed=None,
     device=None,
@@ -33,6 +34,7 @@ def run_experiment(
     # Model params
     model_type="vae",
     model_config=None,
+    save_model=False,
     # You can add extra configuration for your experiments here
     **kw,
 ):
@@ -73,11 +75,16 @@ def run_experiment(
         fit_res = trainer.fit(dl_train=train_loader, dl_test=test_loader, 
                               num_epochs=epochs, checkpoints=checkpoints, max_batches=batches, **kw)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg)
-    
+    if save_model:
+        save_model_state(model, os.path.join(out_dir, "models"), run_name)
 
     save_experiment(run_name, out_dir, cfg, fit_res)
 
+def save_model_state(model, out_dir, run_name):
+    output_filename = f"{os.path.join(out_dir, run_name)}.pt"
+    os.makedirs(out_dir, exist_ok=True)
+    torch.save(model.state_dict(), output_filename)
+    print(f"*** Model file {output_filename} written")
 
 def save_experiment(run_name, out_dir, cfg, fit_res):
     output = dict(config=cfg, results=fit_res._asdict())
@@ -101,7 +108,7 @@ def load_experiment(filename):
 
 
 def parse_cli():
-    p = argparse.ArgumentParser(description="CS3600 HW2 Experiments")
+    p = argparse.ArgumentParser(description="Deep Graphemics Experiments")
     sp = p.add_subparsers(help="Sub-commands")
 
     # Experiment config
@@ -168,40 +175,7 @@ def parse_cli():
 
 
     # # Model
-    sp_exp.add_argument(
-        "--filters-per-layer",
-        "-K",
-        type=int,
-        nargs="+",
-        help="Number of filters per conv layer in a block",
-        metavar="K",
-        required=True,
-    )
-    sp_exp.add_argument(
-        "--layers-per-block",
-        "-L",
-        type=int,
-        metavar="L",
-        help="Number of layers in each block",
-        required=True,
-    )
-    sp_exp.add_argument(
-        "--pool-every",
-        "-P",
-        type=int,
-        metavar="P",
-        help="Pool after this number of conv layers",
-        required=True,
-    )
-    sp_exp.add_argument(
-        "--hidden-dims",
-        "-H",
-        type=int,
-        nargs="+",
-        help="Output size of hidden linear layers",
-        metavar="H",
-        required=True,
-    )
+
     sp_exp.add_argument(
         "--model-type",
         "-M",
@@ -209,9 +183,17 @@ def parse_cli():
         default="cnn",
         help="Which model instance to create",
     )
+    # configuration for the model instance
+    # TODO: figure out how to pass this in
+    sp_exp.add_argument(
+        "--model-config",
+        "-C",
+        type=json.loads,
+        default=None,
+        help="JSON string with model configuration",
+    )
 
     parsed = p.parse_args()
-
     if "subcmd_fn" not in parsed:
         p.print_help()
         sys.exit()
