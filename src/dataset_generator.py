@@ -83,7 +83,7 @@ class DatasetGenerator:
 
         self.augmentations = augmentations.astype(int)
 
-    def plot_graphemes_count(self):
+    def plot_graphemes_count(self, zip_by_letter=False):
         # sum the total number of graphemes for each script across all letters
         counts = np.array(list(self.graphemes_count.sum(axis=0).values))
         augments = np.array(list((self.graphemes_count * self.augmentations * self.repetitions).sum(axis=0).values))
@@ -98,7 +98,7 @@ class DatasetGenerator:
         plt.show()
 
 
-    def generate_dataset(self):
+    def generate_dataset(self, zip_by_letter=False):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         else:
@@ -127,7 +127,10 @@ class DatasetGenerator:
                             for j in range(n_augmentations):
                                 self.random_transformations(canvas, letter, script, character, font, font_name, paint)
                             self.counts[letter] += n_augmentations
-                print(f"Finished letter {letter}")
+                if zip_by_letter:
+                    os.system(f"zip -qq -r {self.output_dir}/{letter}.zip {self.output_dir}/{letter}")
+                    os.system(f"rm -rf {self.output_dir}/{letter}")
+
         print('Finished')
         print(f"total number of images generated: {sum(self.counts.values())}")
         print(f"Number of images generated for each letter: {self.counts}")

@@ -22,10 +22,11 @@ class GraphemesDataset(Dataset):
 
         self.images = self.load_images()
 
-        if train:
-            self.images, _ = train_test_split(self.images, test_size=test_size, random_state=random_state)
-        else:
-            _, self.images = train_test_split(self.images, test_size=test_size, random_state=random_state)
+        if test_size != 0:
+            if train:
+                self.images, _ = train_test_split(self.images, test_size=test_size, random_state=random_state)
+            else:
+                _, self.images = train_test_split(self.images, test_size=test_size, random_state=random_state)
 
         self.transform = transform
 
