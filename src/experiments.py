@@ -8,12 +8,12 @@ import itertools
 import torchvision
 from torch.utils.data import DataLoader
 
-from . import vae, capsnet, training
+from . import capsnet_old, vae, training
 from .train_results import FitResult
 from .datasets import GraphemesDataset
 
 #DATA_DIR = os.path.expanduser("~/.pytorch-datasets")
-MODEL_TYPES = dict(vae=vae.VariationalAutoencoder, capsnet=capsnet.CapsNet)
+MODEL_TYPES = dict(vae=vae.VariationalAutoencoder, capsnet=capsnet_old.CapsNet)
 
 def run_experiment(
     run_name,
@@ -67,7 +67,7 @@ def run_experiment(
         fit_res = trainer.fit(dl_train=train_loader, dl_test=test_loader, 
                               num_epochs=epochs, checkpoints=checkpoints, max_batches=batches, **kw)
     elif model_type == "capsnet":
-        model = capsnet.CapsNet(model_config)
+        model = capsnet_old.CapsNet(model_config)
         model = torch.nn.DataParallel(model)
         model = model.module
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=reg)
