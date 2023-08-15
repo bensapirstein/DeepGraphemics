@@ -62,6 +62,9 @@ class DatasetGenerator:
                 font.setTypeface(skia.Typeface.MakeFromFile(font_path))
                 self.fnts[script][font_name] = font
 
+    def get_final_graphemes_count(self):
+        return self.graphemes_count * self.augmentations * self.repetitions
+
     def calculate_grapheme_counts(self):
         """
         Calculate the number of graphemes for each script and letter combination.
