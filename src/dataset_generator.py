@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 
 class DatasetGenerator:
     def __init__(self, font_encoding_file, output_dir, fonts_dir, img_size=28, translate=True, 
-                 rotation_dist=(0,5), sizes=range(20, 25), max_augmentations=10, repetitions=1, selected_scripts=None, selected_letters=None):
+                 rotation_dist=(0,5), sizes=range(20, 25), max_augmentations=10, repetitions=1, 
+                 selected_scripts=None, selected_letters=None, dummy=False):
         """
         A class for generating a dataset of images from fonts for various scripts.
         """
@@ -21,6 +22,7 @@ class DatasetGenerator:
         self.font_size_range = sizes
         self.max_augmentations = max_augmentations
         self.repetitions = repetitions
+        self.dummy = dummy
 
         # Load font encoding data
         self.font_encoding = pd.read_csv(font_encoding_file, index_col=0)
@@ -42,10 +44,29 @@ class DatasetGenerator:
         self.graphemes_count = pd.DataFrame(0, index=self.letters, columns=self.scripts)
         self.counts = {letter: 0 for letter in self.letters}
 
+        # create a dataframe for image paths for each letter and font, this should also keep the script
+        # information for each font
+        font_index = self.font_encoding.index
+        scripts = self.font_encoding["script"]
+        letter_names = list(self.letters)
+
+        # Generate a list of tuples for the multi-index
+        multi_index = [(font, letter, script) for font, script in zip(font_index, scripts) for letter in letter_names]
+
+        # Create a DataFrame with the multi-index and 'img path' column
+        self.img_paths = pd.DataFrame(index=pd.MultiIndex.from_tuples(multi_index, names=['font', 'letter', 'script']))
+
         # Load fonts and calculate grapheme and augmentation counts
         self.load_fonts()
         self.calculate_grapheme_counts()
         self.calculate_augmentation_counts()
+
+        # drop the rows with nan values
+        self.img_paths = self.img_paths.dropna()
+
+
+    def get_image_paths(self):
+        return self.img_paths.dropna()
 
     def load_fonts(self):
         """
@@ -104,7 +125,7 @@ class DatasetGenerator:
     def generate_dataset(self, zip_by_letter=False):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
-        else:
+        elif not self.dummy:
             print(f"Output directory {self.output_dir} already exists. Exiting...")
             return
 
@@ -112,7 +133,6 @@ class DatasetGenerator:
         paint = skia.Paint()
         with surface as canvas:
             for letter in self.letters:
-                print(letter)
                 for script in self.fnts:
                     path = os.path.join(self.output_dir, letter, script)
                     if not os.path.exists(path):
@@ -127,18 +147,29 @@ class DatasetGenerator:
                         for i, character in enumerate(graphemes_unicodes):
                             if pd.isna(character):
                                 continue
+
                             for j in range(n_augmentations):
-                                self.random_transformations(canvas, letter, script, character, font, font_name, paint)
+                                # create a unique name for the image
+                                #img_name = f"{letter}_{script}_{font_name}_{character}_{j}"
+                                img_name = f"{letter}_{script}_{font_name}_{character}_22_{j}.0"
+                                img_path = os.path.join(self.output_dir, letter, script)
+                                img_full_path = os.path.join(img_path, f"{img_name}.png")
+
+                                if not self.dummy:
+                                    self.random_transformations(canvas, letter, script, character, font, font_name, paint, img_full_path)
+                            
+                            # save the full path of the last image generated
+                            self.img_paths.loc[(font_name, letter, script), "img_path"] = img_full_path
+
                             self.counts[letter] += n_augmentations
                 if zip_by_letter:
                     os.system(f"zip -qq -r {self.output_dir}/{letter}.zip {self.output_dir}/{letter}")
                     os.system(f"rm -rf {self.output_dir}/{letter}")
 
-        print('Finished')
         print(f"total number of images generated: {sum(self.counts.values())}")
         print(f"Number of images generated for each letter: {self.counts}")
 
-    def random_transformations(self, canvas, letter, script, character, font, font_name, paint):
+    def random_transformations(self, canvas, letter, script, character, font, font_name, paint, img_full_path=""):
         """
         Apply random transformations to the image.
 
@@ -178,7 +209,6 @@ class DatasetGenerator:
         # apply rotation to the bound
         rotated_bound = rotation.mapRect(bound)
 
-
         if self.translate:
             # translate the canvas by a random amount in both x and y directions
             # the maximum translation is based on the glyph width and height and the img_size
@@ -198,12 +228,7 @@ class DatasetGenerator:
         surface = canvas.getSurface()
         image = surface.makeImageSnapshot()
 
-        # augment the image
-        img_name = f"{letter}_{script}_{font_name}_{character}_{size_value}_{angle}"
-
-        img_path = os.path.join(self.output_dir, letter, script)
-
-        image.save(os.path.join(img_path, f"{img_name}.png"))
+        image.save(img_full_path)
 
 def main():
     selected_scripts = ["Hieroglyph", "Proto-Sinaitic", "Phoenician", "Ancient North-Arabian",
